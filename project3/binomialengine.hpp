@@ -40,10 +40,8 @@ namespace QuantLib {
 
     //! Pricing engine for vanilla options using binomial trees
     /*! \ingroup vanillaengines
-
         \test the correctness of the returned values is tested by
               checking it against analytic results.
-
         \todo Greeks are not overly accurate. They could be improved
               by building a tree so that it has three points at the
               current time. The value would be fetched from the middle
@@ -56,7 +54,8 @@ namespace QuantLib {
         BinomialVanillaEngine_2(
              const boost::shared_ptr<GeneralizedBlackScholesProcess>& process,
              Size timeSteps)
-        : process_(process), timeSteps_(timeSteps) {
+        // Ajout de deux times steps pour pouvoir déterminer le delta de facon précise
+        : process_(process), timeSteps_(timeSteps+2) {
             QL_REQUIRE(timeSteps >= 2,
                        "at least 2 time steps required, "
                        << timeSteps << " provided");
@@ -73,7 +72,7 @@ namespace QuantLib {
 
     template <class T>
     void BinomialVanillaEngine_2<T>::calculate() const {
-
+        std::cout << "laaaaaaaaaaa" << std::endl;
         DayCounter rfdc  = process_->riskFreeRate()->dayCounter();
         DayCounter divdc = process_->dividendYield()->dayCounter();
         DayCounter voldc = process_->blackVolatility()->dayCounter();
@@ -111,9 +110,14 @@ namespace QuantLib {
                          new GeneralizedBlackScholesProcess(
                                       process_->stateVariable(),
                                       flatDividends, flatRiskFree, flatVol));
-
+        //Détermination de la durée d'un time step en durée        
+        TimeGrid grid2(maturity, timeSteps_);
+        Time dt=grid2.dt(1);
+        
+        //TimeGrid grid(maturity, timeSteps_+2);
+        //TimeGrid grid(maturity+2*dt, timeSteps_); rajouter deux times steps 
         TimeGrid grid(maturity, timeSteps_);
-
+        std::cout<<"laaaaaaaa"<<std::endl;
         boost::shared_ptr<T> tree(new T(bs, maturity, timeSteps_,
                                         payoff->strike()));
 
@@ -139,30 +143,34 @@ namespace QuantLib {
         Real s2u = lattice->underlying(2, 2); // up price
         Real s2m = lattice->underlying(2, 1); // middle price
         Real s2d = lattice->underlying(2, 0); // down (low) price
+        
 
         // calculate gamma by taking the first derivate of the two deltas
-        Real delta2u = (p2u - p2m)/(s2u-s2m);
-        Real delta2d = (p2m-p2d)/(s2m-s2d);
-        Real gamma = (delta2u - delta2d) / ((s2u-s2d)/2);
-
+        //Nouvelle méthode de calcul de delta et gamma
+        Real delta = (p2u - p2d)/((s2u-s2d));
+        //Real delta2u = (p2u - p2m)/(s2u-s2m);
+        //Real delta2d = (p2m-p2d)/(s2m-s2d);
+        //Real gamma = (delta2u - delta2d) / ((s2u-s2d)/2);
+        Real gamma=((p2u - p2m)/(s2u-s2m) - (p2m-p2d)/(s2m-s2d))/((s2u-s2d)/2);
         // Rollback to second-last step, and get option values (p1) at
         // this point
-        option.rollback(grid[1]);
+        /*option.rollback(grid[1]);
         Array va(option.values());
         QL_ENSURE(va.size() == 2, "Expect 2 nodes in grid at first step");
         Real p1u = va[1];
         Real p1d = va[0];
         Real s1u = lattice->underlying(1, 1); // up (high) price
-        Real s1d = lattice->underlying(1, 0); // down (low) price
+        Real s1d = lattice->underlying(1, 0); // down (low) price*/
 
-        Real delta = (p1u - p1d) / (s1u - s1d);
+        //Real delta = (p1u - p1d) / (s1u - s1d);
 
         // Finally, rollback to t=0
         option.rollback(0.0);
         Real p0 = option.presentValue();
 
         // Store results
-        results_.value = p0;
+        //On renvoie la valeur du deuxième noeud
+        results_.value = p2m;
         results_.delta = delta;
         results_.gamma = gamma;
         results_.theta = blackScholesTheta(process_,
